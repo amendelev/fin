@@ -121,7 +121,11 @@ class car extends Command
             if (empty($passo_id)) {
                 throw new InvalidArgumentException('passo_id');
             };
-            $exec=$car->executor('id', $passo_id);
+            if ('next'==$passo_id) {
+                $exec=$car->executor($passo_id);
+            }else{
+                $exec=$car->executor('id', $passo_id);
+            };
             $met=$emet;
             if (method_exists($exec, $met)) {
                 if ('process'==$met) {

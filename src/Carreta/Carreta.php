@@ -5,6 +5,7 @@ namespace App\Carreta;
 use Medoo\Medoo;
 use UnexpectedValueException;
 use DateTime;
+use DateTimeZone;
 use DateInterval;
 use DatePeriod;
 
@@ -31,20 +32,67 @@ class Carreta
         };
         return $db;
     }
+    function q($x) {
+        return $this->db()->quote($x);
+    }
     function executor($mode, $xid=null) {
         if ('id'==$mode) {
             $sid=$this->tarefa()->sid;
             $passo=$this->passo_get(array('id'=>$xid, 'tarefa'=>$sid));
             if (empty($passo)) {
-                throw new UnexpectedValueException('passo не найдено');      
+                throw new UnexpectedValueException('passo не найдено');
             };
+        }elseif ('next'==$mode) {
+            $sid=$this->tarefa()->sid;
+            $uniqid=uniqid();
+            $now=$this->now();
+            $min5ate=$this->now('-5 min');
+            $change=array(
+                'uniqid'=>$uniqid,
+                'exec_pid'=>getmypid(),
+                'com_ts'=>$now,
+            );
+            $where_sql=<<<EEFEF
+WHERE
+    tarefa={$this->q($sid)}
+    AND res_is=0
+    AND
+    ( 
+        com_ts IS null
+        OR ( term_ts>=com_ts AND term_ts <= {$this->q($now)} ) 
+--        OR ( com_ts <= {$this->q($min5ate)} ) 
+    )
+ORDER BY dt
+LIMIT 1
+EEFEF;
+            $where=Medoo::raw($where_sql);
+            $this->db()->update('passo', $change, $where);
+            if ($this->db_err()) {
+                throw new UnexpectedValueException('update failed');
+//echo "sql={$this->db()->last()}\n";
+//echo "err={$this->db()->error()[2]}";
+            };
+            $passo=$this->passo_get(array('uniqid'=>$uniqid));
         }else{
             throw new UnexpectedValueException('неизвестный режим');  
         };
         $exec=new Executor;
         $exec->set_carreta($this);
-        $exec->set_passo($passo);
+        $exec->set_passo($passo);// может быть пустым(!)
         return $exec;
+    }
+    function db_err() {
+        $err=$this->db()->error();
+        $is=$err[0]!='0000';
+        return $is;
+    }
+    function now($modi=null) {
+        $date_utc = new DateTime("now", new DateTimeZone("UTC"));
+        if ($modi) {
+            $date_utc->modify($modi);
+        };
+        $ret=$date_utc->format("Y-m-d H:i:s");
+        return $ret;
     }
     function passo_get($arr) {
         $ret=$this->db()->get('passo', '*',$arr);

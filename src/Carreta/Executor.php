@@ -15,7 +15,13 @@ class Executor
     function set_passo($passo) {
         $this->_passo=$passo;
     }
+    function empty() {
+        return empty($this->_passo);
+    }
     function passo() {
+        if (empty($this->_passo)) {
+            throw new UnexpectedValueException('no passo');
+        };
         return $this->_passo;
     }
     function db() {
