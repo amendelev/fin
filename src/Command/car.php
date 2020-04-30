@@ -12,9 +12,6 @@ use App\Carreta\Carreta;
 use InvalidArgumentException;
 use DateInterval;
 use DatePeriod;
-#use Doctrine\ORM\EntityManagerInterface;
-#use Doctrine\Common\Collections\Criteria;
-#use App\Repository\SumkaRepository;
 
 class car extends Command
 {
