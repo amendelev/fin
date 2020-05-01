@@ -35,6 +35,66 @@ class Carreta
     function q($x) {
         return $this->db()->quote($x);
     }
+    function passo_run() {
+// считаем что задание уже есть
+        $tarefa=$this->tarefa();
+        $this->tarefa_com();
+        $this->set_tarefa($tarefa->sid);
+
+        set_time_limit(0);
+        $runid=uniqid();
+        $need_next=true; $err_count=0;
+
+        $this->log("$runid comecar {$tarefa->sid}");
+        do {
+// начали задание   
+            $exec=$this->executor('next');
+            if ($exec->empty()) {// не нашлось заданий, для выполнения
+                $this->log("$runid empty");
+                $need_next=false;
+            }else{
+                $passo=$exec->passo();
+                $this->log("$runid passo com {$tarefa->sid} {$passo->dt} {$passo->id}");
+                $res_is=null;
+                try {
+                    $exec->receber_e_conservar();
+                    $res_is=true;
+                }catch(Throwable $ex) {
+                    $res_is=false;
+                    $err_count++;
+                    $this->log($ex, "$runid passo exception {$tarefa->sid} {$passo->dt} {$passo->id}");
+                };
+                $exec->passo_term($res_is);
+                $suc=$res_is ? 'SUCESSO' : 'MALOGRO';
+                $this->log("$runid $suc passo term {$tarefa->sid} {$passo->dt} {$passo->id}");
+            };
+            $exec=null;
+        } while ($need_next && $err_count<10);     
+        $is_ok=$this->tarefa_term_tentar();
+        $suc=$is_ok ? 'SUCESSO' : 'MALOGRO';
+        $this->log("$runid $suc terminar {$tarefa->sid} err_count=$err_count");
+        return true;
+    }
+    function tarefa_com() {
+        $tarefa=$this->tarefa();
+        $where=array('sid'=>$tarefa->sid, 'exec_com_ts'=>null);
+        $change=array('exec_com_ts'=> $this->now());
+        $this->db()->update('tarefa', $change, $where);
+    }
+    function tarefa_term_tentar() {
+        $tarefa=$this->tarefa();
+        $has_not_ready=$this->db()->has('passo', array('res_is'=>0));
+        if ($has_not_ready) {
+        }else{
+            $where=array('sid'=>$tarefa->sid);
+            $change=array('exec_term_ts'=> $this->now());
+            $this->db()->update('tarefa', $change, $where);
+        };
+
+        return !$has_not_ready;
+    }
+
+
     function executor($mode, $xid=null) {
         if ('id'==$mode) {
             $sid=$this->tarefa()->sid;
@@ -51,6 +111,7 @@ class Carreta
                 'uniqid'=>$uniqid,
                 'exec_pid'=>getmypid(),
                 'com_ts'=>$now,
+                "conta[+]" => 1,
             );
             $where_sql=<<<EEFEF
 WHERE
@@ -59,10 +120,10 @@ WHERE
     AND
     ( 
         com_ts IS null
-        OR ( term_ts>=com_ts AND term_ts <= {$this->q($now)} ) 
---        OR ( com_ts <= {$this->q($min5ate)} ) 
+        OR ( term_ts is not null AND term_ts>=com_ts AND term_ts < {$this->q($now)} ) 
+        OR ( com_ts <= {$this->q($min5ate)} ) -- процесс убился по фатальной ошибке
     )
-ORDER BY dt
+ORDER BY conta,dt
 LIMIT 1
 EEFEF;
             $where=Medoo::raw($where_sql);
@@ -97,6 +158,28 @@ EEFEF;
     function passo_get($arr) {
         $ret=$this->db()->get('passo', '*',$arr);
         return empty($ret) ? $ret : (object) $ret;
+    }
+
+    var $_logger;
+    function set_logger($logger) {
+        $this->_logger=$logger;
+    }
+    function logger() {
+        return $this->_logger;
+    }
+    function log($x, $par=null) {
+        if ($this->logger()) {
+            if (!$par) {
+                $par=array();
+            }elseif (is_scalar($par)) {
+                $par=array($par);
+            };
+            if ($x instanceof Throwable) {
+                $this->logger()->error($x, $par);
+            }else{
+                $this->logger()->info($x, $par);
+            };
+        }
     }
 
     var $_tarefa;

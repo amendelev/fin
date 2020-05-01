@@ -4,6 +4,7 @@ namespace App\Carreta;
 use GuzzleHttp\Client;
 //use GuzzleHttp\Psr7\StreamWrapper;
 use UnexpectedValueException;
+use Throwable;
 
 class Executor
 {
@@ -26,6 +27,9 @@ class Executor
     }
     function db() {
         return $this->_car->db();
+    }
+    function log($x, $par=null) {
+        $this->_car->log($x, $par);
     }
     function files() {
         return $this->_car->files();
@@ -55,6 +59,27 @@ class Executor
             $this->conservar($agg_row);
         };
         return true;
+    }
+    function now($modi=null) {
+        return $this->_car->now($modi);
+    }
+    var $_term;
+    function passo_term($res_is) {
+// предполагается что после этого объект 
+// нужен только для сбора статистики
+        $uniqid=$this->passo()->uniqid;
+        $uniq=array('uniqid' => $uniqid);
+        $change=array(
+            'uniqid'=>null,
+            'exec_pid'=>null,
+            'term_ts'=>$this->now(),
+            'res_is'=>$res_is ? 1 : 0,
+        );
+        if ($res_is) {
+            $change=array_merge($this->process_stat(), $change);
+        };
+        $this->db()->update('passo', $change, $uniq);
+        $this->_term=true;
     }
 
 // получить файлик и сохранить локально
@@ -136,12 +161,17 @@ class Executor
 $this->conservar_csv($all);// отладка(!)
         return true;
     }
+    function mkdir($dir) {
+        if (!file_exists($dir)) {
+            @mkdir($dir, 0775);
+        };
+    }
     function conservar_csv($all) {// отладка(!)
         $passo=$this->passo();
         $tarefa=$this->tarefa();
         $files=$this->files_out();
         $dir="{$files}/{$tarefa->sid}";
-        @mkdir($dir, 0775);
+        $this->mkdir($dir);
         $path="{$dir}/{$passo->dt}.csv";
         $ha=fopen($path, 'w');
         ftruncate($ha, 0);
@@ -149,7 +179,7 @@ $this->conservar_csv($all);// отладка(!)
             $vals=$this->row_csv_vals($row);
             fputcsv($ha, $vals, ';');
         };
-        @fclose($path);
+        @fclose($ha);
         @chmod($path,0664);
     }
 
@@ -174,9 +204,11 @@ $this->conservar_csv($all);// отладка(!)
             'tsena_sr'=>null,
         );
         $count=0;
+        $quan_min=0;
         foreach ($process as $line) {
             if ($count) {
                 if ($this->minuta_proshla($line['ts_msk'], $prev['ts_msk'])) {
+                    $quan_min++;
                     yield $this->agg_minuta_trim($prev);
                 };
             };
@@ -198,8 +230,10 @@ $this->conservar_csv($all);// отладка(!)
             $count++;
         };
         if ($count) {
+            $quan_min++;
             yield $this->agg_minuta_trim($row);
         };
+        $this->set_process_stat('quan_min', $quan_min);
     }
     function minuta_proshla($d1, $d2) {
 // если началась новая минута = true
@@ -217,6 +251,7 @@ $this->conservar_csv($all);// отладка(!)
         $row['ts_msk']=$this->minuta_trim($row['ts_msk']);
         return $row;
     }
+
     function process($file) {
         try {
             $base=dirname(dirname($this->files()));
@@ -227,18 +262,31 @@ $this->conservar_csv($all);// отладка(!)
                 $cmd="cat {$file}";
             };
             $handle=popen($cmd, "r");
+            $quan=0;
             while (($buffer = fgets($handle, 4096)) !== false) {
                 if ('#'==substr($buffer,0,1)) {
                     continue;
                 };
                 $all=$this->parse_line($buffer);
+                $quan++;
                 yield $all;
             };
         } finally {
             if ($handle) {
                 @pclose($handle);
             };
-        }
+        };
+        $this->set_process_stat('quan', $quan);
+    }
+    var $_stat=array(
+        'quan'=>0,
+        'quan_min'=>0,
+    );
+    function set_process_stat($ff, $val) {
+        $this->_stat[$ff]=$val;
+    }
+    function process_stat() {
+        return $this->_stat;
     }
     function guzzle_request($tarefa,$dt) {// можно тестировать!
 // http://erinrv.qscalp.ru/2020-04-03/GAZP.2020-04-03.Deals.qsh"        
@@ -260,7 +308,7 @@ $this->conservar_csv($all);// отладка(!)
     }
     function deslocar($tmp, $nov) {
         $dir=dirname($nov);
-        @mkdir($dir, 0775);
+        $this->mkdir($dir);
         $ok=copy($tmp, $nov);
         @unlink($tmp);
         @chmod($nov, 0664);

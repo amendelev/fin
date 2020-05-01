@@ -10,8 +10,10 @@ use DateTime;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use App\Carreta\Carreta;
 use InvalidArgumentException;
+use Throwable;
 use DateInterval;
 use DatePeriod;
+use Psr\Log\LoggerInterface;
 
 class car extends Command
 {
@@ -31,11 +33,12 @@ class car extends Command
         ;
     }
 
-    var $em;
+    var $logger;
 
-    public function __construct(ParameterBagInterface $params)
+    public function __construct(ParameterBagInterface $params, LoggerInterface $logger)
     {
         $this->params = $params;
+        $this->logger = $logger;
         parent::__construct();
     }
 
@@ -72,6 +75,33 @@ class car extends Command
     }
 
     function par(array $input, OutputInterface $output) {
+
+           
+        try {
+            throw new InvalidArgumentException('invatest');
+        } catch ( Throwable   $ex) {
+            $msg=$ex->__toString();
+            $all=array();
+            $all['#code']=$ex->getCode();
+            $all['#file']=$ex->getFile().':'.$ex->getLine();
+//            $all['#trace']=$ex->getTrace();
+            $this->logger->error($msg, $all);
+        };
+        $this->logger->info("after");
+
+/*
+
+if (false) {
+            $msg=$ex->getMessage();
+            $all=array();
+            $all['#code']=$ex->getCode();
+            $all['#file']=$ex->getFile().':'.$ex->getLine();
+            $all['#trace']=$ex->getTraceAsString();
+            $this->logger->error($msg, $all);
+};
+        };
+
+*/
         $tarefa_db=$this->params->get('tarefa_db');
         $output->writeln("tarefa_db=$tarefa_db");
 
@@ -98,6 +128,7 @@ class car extends Command
         $tarefa_db=$this->params->get('tarefa_db');
 
         $car=new Carreta;
+        $car->set_logger($this->logger);
         $car->set_db($tarefa_db);
         if (!$car->tarefa_has($sid)) {
             throw new InvalidArgumentException('unknown sid');
@@ -157,6 +188,13 @@ class car extends Command
                     $agg_row=$exec->agg_minuta($line_all);
                     $ret=$exec->conservar($agg_row);
                     $this->dump("Excecutor->$met вернул", $ret);
+                }elseif ('passo_term'==$met) {
+                    $this->dump('passo pered', $exec->passo());
+                    $exec->set_process_stat('quan',123123);
+                    $exec->set_process_stat('quan_min',123);
+                    $exec->passo_term(true);
+                    $passo=$car->passo_get(array('id'=>$exec->passo()->id));
+                    $this->dump('after passo', $passo);
                 }else{
                     $ret=$exec->$met();
                     $this->dump("Excecutor->$met вернул", $ret);
