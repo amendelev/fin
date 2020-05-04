@@ -19,6 +19,9 @@ class Carreta
             'database_type' => 'sqlite',
             'database_file' => $path,
         ]);
+        $this->_db->query('PRAGMA synchronous=NORMAL');
+//        $this->_db->query('PRAGMA journal_mode=WAL');
+
         $this->_files=dirname($path).'/files';
     }
     function files() {
@@ -77,17 +80,23 @@ class Carreta
     }
     function tarefa_com() {
         $tarefa=$this->tarefa();
-        $where=array('sid'=>$tarefa->sid, 'exec_com_ts'=>null);
+        $where=array(
+            'sid'=>$tarefa->sid, 
+            'exec_com_ts'=>null);
         $change=array('exec_com_ts'=> $this->now());
         $this->db()->update('tarefa', $change, $where);
     }
     function tarefa_term_tentar() {
         $tarefa=$this->tarefa();
-        $has_not_ready=$this->db()->has('passo', array('res_is'=>0));
+        $has_not_ready=$this->db()->has('passo', array(
+            'sid'=>$tarefa->sid,
+            'res_is'=>0,
+        ));
         if ($has_not_ready) {
         }else{
             $where=array('sid'=>$tarefa->sid);
-            $change=array('exec_term_ts'=> $this->now());
+
+            $change=array('exec_term_ts' => $this->now());
             $this->db()->update('tarefa', $change, $where);
         };
 
@@ -123,7 +132,7 @@ WHERE
         OR ( term_ts is not null AND term_ts>=com_ts AND term_ts < {$this->q($now)} ) 
         OR ( com_ts <= {$this->q($min5ate)} ) -- процесс убился по фатальной ошибке
     )
-ORDER BY conta,dt
+ORDER BY conta,dt desc
 LIMIT 1
 EEFEF;
             $where=Medoo::raw($where_sql);
@@ -226,7 +235,9 @@ EEFEF;
         foreach ($period as $dt) {
             $dts=$dt->format('Y-m-d');
             $all=array('tarefa'=>$sid, 'dt'=> $dts);
-            $db->insert('passo', $all);
+            if (!$db->has('passo', $all)) {
+                $db->insert('passo', $all);
+            };
             $encher=$encher+1;
         };
         return $encher;

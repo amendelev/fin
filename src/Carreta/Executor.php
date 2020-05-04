@@ -155,9 +155,11 @@ class Executor
         $all=array();
         foreach ($agg_row as $row) {
             $insert=array_merge($row, $where, $fin );
-            $this->db()->insert('instrument', $insert);
+            $insert_arr[]=$insert;
             $all[]=$insert;
+
         };
+        $this->db()->insert('instrument', $all);
 $this->conservar_csv($all);// отладка(!)
         return true;
     }

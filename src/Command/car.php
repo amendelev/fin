@@ -14,6 +14,7 @@ use Throwable;
 use DateInterval;
 use DatePeriod;
 use Psr\Log\LoggerInterface;
+use PDO;
 
 class car extends Command
 {
@@ -57,7 +58,8 @@ class car extends Command
 //        error_reporting(E_ALL & ~E_NOTICE);        
         $now=new DateTime;
         $do=$input->getArgument('do');
-        $output->writeln("start $do {$now->format('c')}");
+        $pid=getmypid();
+        $output->writeln("start $do pid=$pid now={$now->format('c')}");
         $exi=0;
         $par=$this->parse_arg($input);
 
@@ -119,6 +121,34 @@ if (false) {
 
 
     }
+
+    function set_wal(array $input, OutputInterface $output) {
+        $tarefa_db=$this->params->get('tarefa_db');
+        $car=new Carreta;
+        $car->set_logger($this->logger);
+        $car->set_db($tarefa_db);
+        $res=$car->db()->query("PRAGMA journal_mode=WAL");
+        $this->dump('set_wal', $res);
+    }
+
+    function db(array $input, OutputInterface $output) {
+        $tarefa_db=$this->params->get('tarefa_db');
+        $car=new Carreta;
+        $car->set_logger($this->logger);
+        $car->set_db($tarefa_db);
+
+        $pragma=array(
+            'PRAGMA journal_mode',
+            'PRAGMA synchronous',
+        );
+        foreach ($pragma as $sql) {
+            $rs=$car->db()->query($sql);
+            $row=$rs->fetch(PDO::FETCH_ASSOC);
+            $this->dump('sql', $row);
+        };
+    }
+
+
 
     function passo(array $input, OutputInterface $output) {
         $sid=@$input['sid'];
