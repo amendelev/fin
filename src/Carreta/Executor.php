@@ -28,6 +28,9 @@ class Executor
     function db() {
         return $this->_car->db();
     }
+    function dt($date) {
+        return $this->_car->dt($date);
+    }
     function log($x, $par=null) {
         $this->_car->log($x, $par);
     }
@@ -82,13 +85,25 @@ class Executor
         $this->_term=true;
     }
 
+    function receber_path() {
+        $tarefa=$this->tarefa();
+        $passo=$this->passo();
+        $files=$this->files();
+        $path="";
+        if ($tarefa->by_year) {
+            $year=$this->dt($passo->dt)->format('Y');
+            $path="{$files}/{$tarefa->sid}/$year/{$passo->dt}.file";
+        }else{
+            $path="{$files}/{$tarefa->sid}/{$passo->dt}.file";
+        };
+        return $path;
+    }
+
 // получить файлик и сохранить локально
     function receber() {
         $tarefa=$this->tarefa();
         $passo=$this->passo();
-//print_r($passo);        
-        $files=$this->files();
-        $path="{$files}/{$tarefa->sid}/{$passo->dt}.file";
+        $path=$this->receber_path();
         if (!is_file($path)) {
             $responce=$this->guzzle_request($tarefa, $passo->dt);
             $status=$responce->getStatusCode();
@@ -165,16 +180,33 @@ $this->conservar_csv($all);// отладка(!)
     }
     function mkdir($dir) {
         if (!file_exists($dir)) {
-            @mkdir($dir, 0775);
+            @mkdir($dir, 0775, true);// рекурсивно(!)
         };
     }
-    function conservar_csv($all) {// отладка(!)
-        $passo=$this->passo();
-        $tarefa=$this->tarefa();
-        $files=$this->files_out();
-        $dir="{$files}/{$tarefa->sid}";
+    function mkdir_file($file) {
+        $dir=dirname($file);
         $this->mkdir($dir);
-        $path="{$dir}/{$passo->dt}.csv";
+    }
+
+
+    function csv_path() {
+        $tarefa=$this->tarefa();
+        $passo=$this->passo();
+        $files=$this->files_out();
+        $path="";
+        if ($tarefa->by_year) {
+            $year=$this->dt($passo->dt)->format('Y');
+            $path="{$files}/{$tarefa->sid}/$year/{$passo->dt}.csv";
+        }else{
+            $path="{$files}/{$tarefa->sid}/{$passo->dt}.csv";
+        };
+        return $path;
+    }
+
+
+    function conservar_csv($all) {// отладка(!)
+        $path=$this->csv_path();
+        $this->mkdir_file($path);
         $ha=fopen($path, 'w');
         ftruncate($ha, 0);
         foreach ($all as $row) {
@@ -309,11 +341,10 @@ $this->conservar_csv($all);// отладка(!)
         return $ret;
     }
     function deslocar($tmp, $nov) {
-        $dir=dirname($nov);
-        $this->mkdir($dir);
+        $this->mkdir_file($nov);
         $ok=copy($tmp, $nov);
-        @unlink($tmp);
         @chmod($nov, 0664);
+        @unlink($tmp);
         return $ok;
     }
 
