@@ -123,19 +123,13 @@ if (false) {
     }
 
     function set_wal(array $input, OutputInterface $output) {
-        $tarefa_db=$this->params->get('tarefa_db');
-        $car=new Carreta;
-        $car->set_logger($this->logger);
-        $car->set_db($tarefa_db);
+        $car=$this->constructCarreta();
         $res=$car->db()->query("PRAGMA journal_mode=WAL");
         $this->dump('set_wal', $res);
     }
 
     function db(array $input, OutputInterface $output) {
-        $tarefa_db=$this->params->get('tarefa_db');
-        $car=new Carreta;
-        $car->set_logger($this->logger);
-        $car->set_db($tarefa_db);
+        $car=$this->constructCarreta();
 
         $pragma=array(
             'PRAGMA journal_mode',
@@ -148,6 +142,59 @@ if (false) {
         };
     }
 
+    function add_tarefa(array $input, OutputInterface $output) {
+        $anycar=$this->constructCarreta();
+
+        $tarefa=array();
+        $sid=@$input['sid'];
+        if (!preg_match("@^[a-zA-Z0-9_-]+$@", $sid)) {
+            throw new InvalidArgumentException('bad sid');
+        };
+        $tarefa['sid']=$sid;
+
+        if (!$anycar->tarefa_has($sid)) {
+            $tarefa['tip']='qscalp';
+
+            $finid=@$input['finid'];
+            if (!$finid) {
+                $finid=$sid;
+            };
+            if (!preg_match("@^[a-zA-Z0-9_-]+$@", $finid)) {
+                throw new InvalidArgumentException('bad findid');
+            };
+            $tarefa['finid']=$finid;
+        };
+
+        $de=@$input['de'];
+        if (!$anycar->dtIsValid($de)) {
+            throw new InvalidArgumentException('bad de'); 
+        };
+        $tarefa['de_dt']=$de;
+
+        $ate=@$input['ate'];
+        if (!$anycar->dtIsValid($ate)) {
+            throw new InvalidArgumentException('bad ate');
+        };
+        $tarefa['ate_dt']=$ate;
+
+        if (!($de<=$ate)) {
+            throw new InvalidArgumentException('de is more then ate');
+        };
+        $anycar->tarefaCreateOrUpdate($tarefa);
+        $car=clone $anycar;
+        $car->set_tarefa($sid);
+        $number=$car->passo_encher();
+        $output->writeln("Создано (изменено) задание $sid");
+        $output->writeln("Создано $number шагов");
+    }
+
+    function constructCarreta() {
+        $car=new Carreta;
+        $car->set_logger($this->logger);
+        $tarefa_db=$this->params->get('tarefa_db');
+        $car->set_db($tarefa_db);
+        return $car;
+    }
 
 
     function passo(array $input, OutputInterface $output) {
@@ -155,11 +202,7 @@ if (false) {
         if (empty($sid)) {
             throw new InvalidArgumentException('empty sid');
         };
-        $tarefa_db=$this->params->get('tarefa_db');
-
-        $car=new Carreta;
-        $car->set_logger($this->logger);
-        $car->set_db($tarefa_db);
+        $car=$this->constructCarreta();
         if (!$car->tarefa_has($sid)) {
             throw new InvalidArgumentException('unknown sid');
         };

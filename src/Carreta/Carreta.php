@@ -211,6 +211,27 @@ EEFEF;
         $db=$this->db();
         return $db->has('tarefa', array('sid'=>$sid));
     }
+    function tarefaCreateOrUpdate($tarray) {
+        $sid=$tarray['sid'];
+        $db=$this->db();
+        if ($this->tarefa_has($sid)) {
+            $karray=array('de_dt', 'ate_dt');
+            $change=array_intersect_key($tarray, array_flip($karray));
+            $where=array('sid'=>$sid);
+
+            $db->update('tarefa', $change, $where);
+        }else{
+            $karray=array('sid','tip','finid','de_dt','ate_dt');
+            $add=array_intersect_key($tarray, array_flip($karray));
+            $add['crea_ts']=$this->now();
+
+            $db->insert('tarefa', $add);
+        };
+        if ($this->db_err()) {
+            throw new UnexpectedValueException('изменить задание не удалось!');
+        };
+        return true;
+    }
     function passo_apartar() {
         $db=$this->db();
         $wh=array();
@@ -242,8 +263,14 @@ EEFEF;
         };
         return $encher;
     }
-    function dt($ymd) {
+    function dt(string $ymd)
+    {
         return DateTime::createFromFormat('!Y-m-d', $ymd);
     }
-
+    function dtIsValid(string $ymd): bool
+    {
+        $dt=@$this->dt($ymd);
+        $ret=$dt ? true : false;
+        return $ret;
+    }
 }
