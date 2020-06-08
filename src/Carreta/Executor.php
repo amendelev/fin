@@ -125,13 +125,15 @@ class Executor
         };
         return $path;
     }
-    function parse_line($str) {
+    function parse_line($str, $headers) {
         $str=rtrim($str,"\n");
         $all=explode("\t", $str);
 #TIMESTAMP_MSK____ ________id      1KUPI_2PRODAY
 #price   volume  oi      order_id
         $keys=array('ts_msk','kod','kupro','tsena','vol','oi','order_id');
         $ret=array_combine($keys, $all);
+        $ret['shag']=$headers['shag'];
+        $ret['lot']=$headers['lot'];
         return $ret;
     }
     function row_csv_vals($row) {
@@ -227,8 +229,6 @@ $this->conservar_csv($all);// отладка(!)
             'ts_msk'=>null,
         );
         $row=array(
-            'shag'=>0.01,
-            'lot'=>10,
             'znak'=>null,
             'vol_lot'=>null,
             'tsena_rub'=>null,
@@ -286,6 +286,21 @@ $this->conservar_csv($all);// отладка(!)
         return $row;
     }
 
+    function parse_header($buffer) {
+        $ret=array();
+        $s=trim($buffer,"# \r\n");
+//instrument_code: SmartCOM:LKOH:EQ: :0.5
+// 0                   1      2   3 4  5
+        $a=explode(':', $s);
+        if ('instrument_code'==$a[0]) {
+            $ret['finid']=$a[2];
+            $lot=$a[4] ? intval($a[4]) : 1;
+            $ret['lot']=$lot; 
+            $ret['shag']=(float) $a[5];
+        };
+        return $ret;
+    }
+
     function process($file) {
         try {
             $base=dirname(dirname($this->files()));
@@ -297,11 +312,16 @@ $this->conservar_csv($all);// отладка(!)
             };
             $handle=popen($cmd, "r");
             $quan=0;
+            $headers=array();
             while (($buffer = fgets($handle, 4096)) !== false) {
                 if ('#'==substr($buffer,0,1)) {
+                    $iheaders=$this->parse_header($buffer);
+                    if (!empty($iheaders)) {
+                        $headers=$iheaders+$headers;
+                    };
                     continue;
                 };
-                $all=$this->parse_line($buffer);
+                $all=$this->parse_line($buffer, $headers);
                 $quan++;
                 yield $all;
             };
