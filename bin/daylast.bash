@@ -22,3 +22,9 @@ do
 	echo "${DAYLAST}"
 done
 
+# сводный отчет по шагу и стоимости лота за весь период
+# для контроля
+cd "${ROOT}/sum"
+cat *-daylast.csv | perl -ne '@a=split ";"; if (!@prev || ( $a[6]!=$prev[6] || $a[7]!=$prev[7])) { print $a[0],";",$a[6],";",$a[7],"\n"}; @prev=@a;' > shag-lot.csv
+echo sum/shag-lot.csv
+
